@@ -12,3 +12,8 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+class UserCreate(BaseModel):
+    name: str
+    email: EmailStr
+    password: str

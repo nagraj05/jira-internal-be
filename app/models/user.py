@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from datetime import datetime
+from sqlalchemy.orm import relationship
+from datetime import datetime, timezone
 from app.db.base import Base
 
 class User(Base):
@@ -17,6 +18,8 @@ class User(Base):
 
     is_admin = Column(Boolean, default=False)  # 🔥 IMPORTANT (only one admin)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    memberships = relationship("ProjectMember", back_populates="user")
