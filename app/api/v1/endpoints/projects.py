@@ -1,6 +1,7 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user
@@ -20,7 +21,11 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # create project
+    # verify the designated PM exists
+    pm_user = db.query(User).filter(User.id == data.pm_user_id).first()
+    if not pm_user:
+        raise HTTPException(status_code=404, detail="PM user not found")
+
     project = Project(
         name=data.name,
         description=data.description,
@@ -31,9 +36,9 @@ def create_project(
     db.commit()
     db.refresh(project)
 
-    # add creator as PM
+    # add designated user as PM (not the creator)
     member = ProjectMember(
-        user_id=current_user.id,
+        user_id=data.pm_user_id,
         project_id=project.id,
         role=ProjectRole.PM
     )
@@ -57,14 +62,15 @@ def add_member(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # check current user is PM
-    membership = db.query(ProjectMember).filter_by(
-        user_id=current_user.id,
-        project_id=project_id
-    ).first()
+    # admin can add members to any project; otherwise must be PM
+    if not current_user.is_admin:
+        membership = db.query(ProjectMember).filter_by(
+            user_id=current_user.id,
+            project_id=project_id
+        ).first()
 
-    if not membership or membership.role != ProjectRole.PM:
-        raise HTTPException(status_code=403, detail="Only PM can add members")
+        if not membership or membership.role != ProjectRole.PM:
+            raise HTTPException(status_code=403, detail="Only PM or admin can add members")
 
     # check user exists
     user = db.query(User).filter(User.id == data.user_id).first()
@@ -99,10 +105,20 @@ def get_my_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # admin sees all projects
+    if current_user.is_admin:
+        return db.query(Project).all()
+
     projects = (
         db.query(Project)
-        .join(ProjectMember, ProjectMember.project_id == Project.id)
-        .filter(ProjectMember.user_id == current_user.id)
+        .outerjoin(ProjectMember, ProjectMember.project_id == Project.id)
+        .filter(
+            or_(
+                Project.created_by == current_user.id,
+                ProjectMember.user_id == current_user.id
+            )
+        )
+        .distinct()
         .all()
     )
 
@@ -116,14 +132,15 @@ def get_project_members(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # check membership
-    membership = db.query(ProjectMember).filter_by(
-        user_id=current_user.id,
-        project_id=project_id
-    ).first()
+    # admin can view members of any project
+    if not current_user.is_admin:
+        membership = db.query(ProjectMember).filter_by(
+            user_id=current_user.id,
+            project_id=project_id
+        ).first()
 
-    if not membership:
-        raise HTTPException(status_code=403, detail="Not part of this project")
+        if not membership:
+            raise HTTPException(status_code=403, detail="Not part of this project")
 
     members = db.query(ProjectMember).filter_by(
         project_id=project_id
