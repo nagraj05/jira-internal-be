@@ -1,3 +1,5 @@
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -6,22 +8,22 @@ from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.enums import ProjectRole
 from app.models.user import User
+from app.schemas.project import ProjectCreate, AddMemberRequest, ProjectResponse, ProjectMemberResponse
 
 router = APIRouter()
 
 
 # ✅ CREATE PROJECT
-@router.post("/")
+@router.post("/", response_model=ProjectResponse)
 def create_project(
-    name: str,
-    description: str,
+    data: ProjectCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     # create project
     project = Project(
-        name=name,
-        description=description,
+        name=data.name,
+        description=data.description,
         created_by=current_user.id
     )
 
@@ -46,8 +48,7 @@ def create_project(
 @router.post("/{project_id}/members")
 def add_member(
     project_id: int,
-    user_id: int,
-    role: ProjectRole,
+    data: AddMemberRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -66,13 +67,13 @@ def add_member(
         raise HTTPException(status_code=403, detail="Only PM can add members")
 
     # check user exists
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == data.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     # prevent duplicate members
     existing = db.query(ProjectMember).filter_by(
-        user_id=user_id,
+        user_id=data.user_id,
         project_id=project_id
     ).first()
 
@@ -81,9 +82,9 @@ def add_member(
 
     # add member
     new_member = ProjectMember(
-        user_id=user_id,
+        user_id=data.user_id,
         project_id=project_id,
-        role=role
+        role=data.role
     )
 
     db.add(new_member)
@@ -93,24 +94,23 @@ def add_member(
 
 
 # ✅ GET PROJECTS FOR CURRENT USER
-@router.get("/")
+@router.get("/", response_model=List[ProjectResponse])
 def get_my_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    memberships = db.query(ProjectMember).filter_by(
-        user_id=current_user.id
-    ).all()
-
-    project_ids = [m.project_id for m in memberships]
-
-    projects = db.query(Project).filter(Project.id.in_(project_ids)).all()
+    projects = (
+        db.query(Project)
+        .join(ProjectMember, ProjectMember.project_id == Project.id)
+        .filter(ProjectMember.user_id == current_user.id)
+        .all()
+    )
 
     return projects
 
 
 # ✅ GET PROJECT MEMBERS
-@router.get("/{project_id}/members")
+@router.get("/{project_id}/members", response_model=List[ProjectMemberResponse])
 def get_project_members(
     project_id: int,
     db: Session = Depends(get_db),

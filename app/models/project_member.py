@@ -20,5 +20,5 @@ class ProjectMember(Base):
     role = Column(Enum(ProjectRole), nullable=False)
 
     # relationships
-    user = relationship("User")
+    user = relationship("User", back_populates="memberships")
     project = relationship("Project", back_populates="members")
