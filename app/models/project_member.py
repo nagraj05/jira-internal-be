@@ -1,4 +1,6 @@
-from sqlalchemy import Column, Integer, ForeignKey, Enum, UniqueConstraint
+import uuid
+from sqlalchemy import Column, ForeignKey, Enum, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.base import Base
 from app.models.enums import ProjectRole
@@ -11,11 +13,11 @@ class ProjectMember(Base):
         UniqueConstraint("user_id", "project_id", name="uq_user_project"),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False)
 
     role = Column(Enum(ProjectRole), nullable=False)
 

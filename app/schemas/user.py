@@ -1,9 +1,10 @@
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 
 class UserResponse(BaseModel):
-    id: int
+    id: UUID
     name: str
     email: str
     is_admin: bool
